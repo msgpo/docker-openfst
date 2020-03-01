@@ -18,9 +18,12 @@ for qemu_file in qemu-arm-static qemu-aarch64-static; do
 done
 
 # Do Docker builds
-docker_archs=('amd64' 'arm32v7' 'arm64v8')
+docker_archs=('amd64' 'arm32v7' 'arm64v8' 'arm32v6')
+if [[ ! -z "$1" ]]; then
+    docker_archs=("$@")
+fi
 declare -A friendly_archs
-friendly_archs=(['amd64']='amd64' ['arm32v7']='armhf' ['arm64v8']='aarch64')
+friendly_archs=(['amd64']='amd64' ['arm32v7']='armhf' ['arm64v8']='aarch64' ['arm32v6']='arm32v6')
 
 for docker_arch in "${docker_archs[@]}"; do
     friendly_arch="${friendly_archs[${docker_arch}]}"
@@ -30,17 +33,36 @@ for docker_arch in "${docker_archs[@]}"; do
        exit 1
     fi
 
-    docker_tag="rhasspy/openfst:1.6.9-${friendly_arch}"
+    # Debian build (skip arm32v6)
+    if [[ "${friendly_arch}" != 'arm32v6' ]]; then
+        docker_tag="rhasspy/openfst:1.6.9-${friendly_arch}"
+
+        docker build "${this_dir}" \
+               --build-arg "BUILD_FROM=${docker_arch}/debian:stretch" \
+               -t "${docker_tag}"
+
+        # Copy out build artifacts
+        mkdir -p "${this_dir}/dist"
+        docker run -it \
+               -v "${this_dir}/dist:/dist" \
+               -u "$(id -u):$(id -g)" \
+               "${docker_tag}" \
+               /bin/tar -C /build -czf "/dist/openfst-1.6.9-${friendly_arch}.tar.gz" .
+    fi
+
+    # Alpine build
+    docker_tag="rhasspy/openfst:1.6.9-${friendly_arch}-alpine"
 
     docker build "${this_dir}" \
-        --build-arg "BUILD_FROM=${docker_arch}/debian:stretch" \
-        -t "${docker_tag}"
+           -f Dockerfile.alpine \
+           --build-arg "BUILD_FROM=${docker_arch}/alpine:3.9" \
+           -t "${docker_tag}"
 
     # Copy out build artifacts
     mkdir -p "${this_dir}/dist"
     docker run -it \
-        -v "${this_dir}/dist:/dist" \
-        -u "$(id -u):$(id -g)" \
-        "${docker_tag}" \
-        /bin/tar -C /build -czf "/dist/openfst-1.6.9-${friendly_arch}.tar.gz" .
+           -v "${this_dir}/dist:/dist" \
+           -u "$(id -u):$(id -g)" \
+           "${docker_tag}" \
+           /bin/tar -C /build -czf "/dist/openfst-1.6.9-${friendly_arch}-alpine.tar.gz" .
 done

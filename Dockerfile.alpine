@@ -6,9 +6,9 @@ ARG MAKE_THREADS=8
 COPY etc/qemu-arm-static /usr/bin/
 COPY etc/qemu-aarch64-static /usr/bin/
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        build-essential
+RUN apk update && \
+    apk add --no-cache \
+        build-base
 
 COPY download/openfst-1.6.9.tar.gz /
 
